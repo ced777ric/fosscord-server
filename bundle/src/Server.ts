@@ -36,7 +36,7 @@ async function main() {
 			endpointPrivate: process.env.PRIVATE_CDN ? process.env.PRIVATE_CDN :`http://localhost:${port}`,
 		},
 		gateway: {
-			endpointClient: '${location.protocol === "https:" ? "wss://" : "ws://"}' + (process.env.CLIENT_GATEWAY ? process.env.CLIENT_GATEWAY : `localhost:${port}`),
+			endpointClient: '${location.protocol === "https:" ? "wss://" : "ws://"}' + process.env.CLIENT_GATEWAY ? process.env.CLIENT_GATEWAY : `localhost:${port}` + '',
 			endpointPrivate: process.env.PRIVATE_GATEWAY ? process.env.PRIVATE_GATEWAY : `ws://localhost:${port}`,
 			endpointPublic: process.env.PUBLIC_GATEWAY ? process.env.PUBLIC_GATEWAY : `ws://localhost:${port}`,
 		},
