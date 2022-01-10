@@ -84,7 +84,8 @@ async function main() {
 		case "API":
 			console.log("[Bundle] Start mode: API");
 			const api = new Api.FosscordServer({ server, port, production, app });
-			await Promise.all([api.start()]);
+			const gateway2 = new Gateway.Server({ server, port, production });
+			await Promise.all([api.start(), gateway2.start()]);
 			break;
 		case "GATEWAY":
 			console.log("[Bundle] Start mode: GATEWAY");
