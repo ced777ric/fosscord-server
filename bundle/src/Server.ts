@@ -17,13 +17,6 @@ const port = Number(process.env.PORT) || 3001;
 const production = process.env.NODE_ENV == "development" ? false : true;
 server.on("request", app);
 
-// @ts-ignore
-const api = new Api.FosscordServer({ server, port, production, app });
-// @ts-ignore
-const cdn = new CDNServer({ server, port, production, app });
-// @ts-ignore
-const gateway = new Gateway.Server({ server, port, production });
-
 //this is what has been added for the /stop API route
 process.on('SIGTERM', () => {
 	server.close(() => {
@@ -39,16 +32,14 @@ async function main() {
 	// only set endpointPublic, if not already set
 	await Config.set({
 		cdn: {
-			endpointClient: "${location.host}",
-			endpointPrivate: `http://localhost:${port}`,
+			endpointClient: process.env.CLIENT_CDN ? process.env.CLIENT_CDN : "${location.host}",
+			endpointPrivate: process.env.PRIVATE_CDN ? process.env.PRIVATE_CDN :`http://localhost:${port}`,
 		},
 		gateway: {
 			endpointClient:
-				'${location.protocol === "https:" ? "wss://" : "ws://"}${location.host}',
-			endpointPrivate: `ws://localhost:${port}`,
-			...(!Config.get().gateway.endpointPublic && {
-				endpointPublic: `ws://localhost:${port}`,
-			}),
+				'${location.protocol === "https:" ? "wss://" : "ws://"}' + process.env.CLIENT_GATEWAY ? process.env.CLIENT_GATEWAY : `localhost:${port}`,
+			endpointPrivate: process.env.PRIVATE_GATEWAY ? process.env.PRIVATE_GATEWAY : `ws://localhost:${port}`,
+			endpointPublic: process.env.PUBLIC_GATEWAY ? process.env.PUBLIC_GATEWAY : `ws://localhost:${port}`,
 		},
 		// regions: {
 		// 	default: "fosscord",
@@ -84,7 +75,32 @@ async function main() {
 		app.use(Sentry.Handlers.requestHandler());
 		app.use(Sentry.Handlers.tracingHandler());
 	}
-	await Promise.all([api.start(), cdn.start(), gateway.start()]);
+
+	switch (process.env.MODE) {
+		case "CDN":
+			console.log("[Bundle] Start mode: CDN");
+			const cdn = new CDNServer({server, port, production, app});
+			await Promise.all([cdn.start()]);
+			break;
+		case "API":
+			console.log("[Bundle] Start mode: API");
+			const api = new Api.FosscordServer({ server, port, production, app });
+			await Promise.all([api.start()]);
+			break;
+		case "GATEWAY":
+			console.log("[Bundle] Start mode: GATEWAY");
+			const gateway = new Gateway.Server({ server, port, production });
+			await Promise.all([gateway.start()]);
+			break;
+		default:
+			console.log("[Bundle] Start mode: ALL");
+			const cdn1 = new CDNServer({server, port, production, app});
+			const api1 = new Api.FosscordServer({ server, port, production, app });
+			const gateway1 = new Gateway.Server({ server, port, production });
+			await Promise.all([api1.start(), cdn1.start(), gateway1.start()]);
+			break;
+	}
+
 	if (Config.get().sentry.enabled) {
 		app.use(Sentry.Handlers.errorHandler());
 		app.use(function onError(err: any, req: any, res: any, next: any) {
