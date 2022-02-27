@@ -17,28 +17,6 @@ import { Webhook } from "./Webhook";
 // TODO: guild_scheduled_events
 // TODO: stage_instances
 // TODO: threads
-// TODO: categories:
-// [{
-// 	"id": 16,
-// 	"name": {
-// 		"default": "Anime & Manga",
-// 		"localizations": {
-// 			"de": "Anime & Manga",
-// 			"fr": "Anim\u00e9s et mangas",
-// 			"ru": "\u0410\u043d\u0438\u043c\u0435 \u0438 \u043c\u0430\u043d\u0433\u0430"
-// 		}
-// 	},
-// 	"is_primary": false
-// }]
-// TODO:
-//  primary_category :{
-// 	id: 1,
-// 	name: {
-// 		default: "Gaming",
-// 		localizations: { de: "Gaming", fr: "Gaming", ru: "\u0418\u0433\u0440\u044b" },
-// 		is_primary: true,
-// 	},
-// };
 // TODO:
 // "keywords": [
 // 		"Genshin Impact",
@@ -106,6 +84,9 @@ export class Guild extends BaseClass {
 	@Column({ type: "simple-array" })
 	features: string[]; //TODO use enum
 	//TODO: https://discord.com/developers/docs/resources/guild#guild-object-guild-features
+
+	@Column({ nullable: true })
+	primary_category_id: number;
 
 	@Column({ nullable: true })
 	icon?: string;
@@ -213,7 +194,7 @@ export class Guild extends BaseClass {
 	owner: User;
 
 	@Column({ nullable: true })
-	preferred_locale?: string; // only community guilds can choose this
+	preferred_locale?: string;
 
 	@Column({ nullable: true })
 	premium_subscription_count?: number;
@@ -289,6 +270,9 @@ export class Guild extends BaseClass {
 	@Column({ nullable: true })
 	nsfw?: boolean;
 
+	// only for developer portal
+	permissions?: number;
+
 	static async createGuild(body: {
 		name?: string;
 		icon?: string | null;
@@ -301,22 +285,23 @@ export class Guild extends BaseClass {
 			name: body.name || "Fosscord",
 			icon: await handleFile(`/icons/${guild_id}`, body.icon as string),
 			region: Config.get().regions.default,
-			owner_id: body.owner_id,
+			owner_id: body.owner_id, // TODO: need to figure out a way for ownerless guilds and multiply-owned guilds
 			afk_timeout: 300,
-			default_message_notifications: 0,
+			default_message_notifications: 1, // defaults effect: setting the push default at mentions-only will save a lot
 			explicit_content_filter: 0,
 			features: [],
+			primary_category_id: null,
 			id: guild_id,
 			max_members: 250000,
 			max_presences: 250000,
-			max_video_channel_users: 25,
+			max_video_channel_users: 200,
 			presence_count: 0,
 			member_count: 0, // will automatically be increased by addMember()
 			mfa_level: 0,
 			preferred_locale: "en-US",
 			premium_subscription_count: 0,
 			premium_tier: 0,
-			system_channel_flags: 0,
+			system_channel_flags: 4, // defaults effect: suppress the setup tips to save performance
 			unavailable: false,
 			nsfw: false,
 			nsfw_level: 0,
@@ -326,16 +311,18 @@ export class Guild extends BaseClass {
 				description: "No description",
 				welcome_channels: [],
 			},
-			widget_enabled: false,
+			widget_enabled: true, // NB: don't set it as false to prevent artificial restrictions
 		}).save();
 
 		// we have to create the role _after_ the guild because else we would get a "SQLITE_CONSTRAINT: FOREIGN KEY constraint failed" error
+		// TODO: make the @everyone a pseudorole that is dynamically generated at runtime so we can save storage
 		await new Role({
 			id: guild_id,
 			guild_id: guild_id,
 			color: 0,
 			hoist: false,
 			managed: false,
+			// NB: in Fosscord, every role will be non-managed, as we use user-groups instead of roles for managed groups
 			mentionable: false,
 			name: "@everyone",
 			permissions: String("2251804225"),
@@ -357,7 +344,6 @@ export class Guild extends BaseClass {
 		for (const channel of body.channels?.sort((a, b) => (a.parent_id ? 1 : -1))) {
 			var id = ids.get(channel.id) || Snowflake.generate();
 
-			// TODO: should we abort if parent_id is a category? (to disallow sub category channels)
 			var parent_id = ids.get(channel.parent_id);
 
 			await Channel.createChannel({ ...channel, guild_id, id, parent_id }, body.owner_id, {
