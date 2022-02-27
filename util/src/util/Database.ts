@@ -30,7 +30,8 @@ export function initDatabase(): Promise<Connection> {
 		database: isSqlite ? dbConnectionString : undefined,
 		// @ts-ignore
 		entities: Object.values(Models).filter((x) => x.constructor.name !== "Object" && x.name),
-		synchronize: type !== "mongodb",
+		//synchronize: type !== "mongodb",
+		synchronize: false,
 		logging: false,
 		cache: {
 			duration: 1000 * 3, // cache all find queries for 3 seconds
